@@ -28,7 +28,16 @@ let menuTargets = [
 	null  // 回到首頁（特別處理）
 ];
 let iframeElem = null; // 新增：iframe 參考
-let closeBtnElem = null; // 新增：關閉按鈕參考
+
+// 新增：學生資訊文字跳動動畫變數 (p5.js 預設 60fps)
+let studentInfoBaseY = 30;
+let studentInfoBounce = 0; // 文字上下跳動的偏移量
+let bounceStartTime = 0;
+const bounceDurationUp = 60;   // 向上動畫時間 (1秒)
+const bouncePause = 60;        // 停滯時間 (1秒)
+const bounceDurationDown = 90;   // 向下動畫時間 (1.5秒)
+const totalBounceCycle = bounceDurationUp + bouncePause + bounceDurationDown;
+
 
 function setup() {
 	createCanvas(windowWidth, windowHeight);
@@ -66,6 +75,9 @@ function draw() {
 
     // 在最上層繪製選單
     drawMenu();
+
+    // 更新學生資訊動畫
+    updateStudentInfoAnimation();
 
     // 在最上層繪製學生資訊
     drawStudentInfo();
@@ -133,6 +145,7 @@ class Agent {
 	updateMotion2(n) {
 
 	}
+
 }
 
 class Motion01 extends Agent {
@@ -303,12 +316,52 @@ function drawMenu() {
     pop();
 }
 
+// 新增：easeInOutQuad 函數
+function easeInOutQuad(x) {
+    return x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2;
+}
+
+// 新增：easeOutBounce 函數
+function easeOutBounce(x) {
+    const n1 = 7.5625;
+    const d1 = 2.75;
+    if (x < 1 / d1) { return n1 * x * x; }
+    else if (x < 2 / d1) { return n1 * (x -= 1.5 / d1) * x + 0.75; }
+    else if (x < 2.5 / d1) { return n1 * (x -= 2.25 / d1) * x + 0.9375; }
+    else { return n1 * (x -= 2.625 / d1) * x + 0.984375; }
+}
+
+// 新增：更新學生資訊動畫狀態的函式
+function updateStudentInfoAnimation() {
+    let elapsed = frameCount - bounceStartTime;
+    let progress = 0;
+    const bounceHeight = -20; // 向上跳動的高度
+
+    if (elapsed < bounceDurationUp) {
+        // 階段一：向上移動
+        progress = elapsed / bounceDurationUp;
+        let easedProgress = easeInOutQuad(progress);
+        studentInfoBounce = lerp(0, bounceHeight, easedProgress);
+    } else if (elapsed < bounceDurationUp + bouncePause) {
+        // 階段二：在頂部停滯
+        studentInfoBounce = bounceHeight;
+    } else if (elapsed < totalBounceCycle) {
+        // 階段三：向下移動並反彈
+        progress = (elapsed - bounceDurationUp - bouncePause) / bounceDurationDown;
+        let easedProgress = easeOutBounce(progress);
+        studentInfoBounce = lerp(bounceHeight, 0, easedProgress);
+    } else {
+        // 動畫週期結束，重置
+        studentInfoBounce = 0;
+        bounceStartTime = frameCount;
+    }
+}
 // 新增：在畫布最上層繪製學生資訊
 function drawStudentInfo() {
     push();
     // 設定文字樣式
     const studentInfoText = '班級: 教育科技一年B班   姓名: 張O婕   學號: 414730506';
-    const padding = 10;
+    const padding = 20;
     textSize(20);
     textFont('LXGW WenKai TC');
     textAlign(CENTER, TOP);
@@ -316,16 +369,16 @@ function drawStudentInfo() {
     // 計算背景框尺寸
     const textW = textWidth(studentInfoText);
     const boxW = textW + padding * 2;
-    const boxH = 20 + padding * 2; // 20 是字體大小
+    const boxH = 20 + padding * 2 + 10; // 加大高度以容納跳動
 
     // 繪製半透明背景框
     fill(0, 0, 0, 150); // 黑色，約 60% 透明度
     noStroke();
-    rect(width / 2, 20 + boxH / 2 - padding, boxW, boxH, 6); // 圓角為 6
+    rect(width / 2, studentInfoBaseY + boxH / 2 - padding, boxW, boxH, 6);
 
     // 繪製文字
     fill('#ffd60a');
-    text(studentInfoText, width / 2, 20);
+    text(studentInfoText, width / 2, studentInfoBaseY + studentInfoBounce);
     pop();
 }
 
@@ -335,42 +388,24 @@ function showIframe(url) {
         iframeElem = createElement('iframe');
         iframeElem.attribute('frameborder', '0');
         iframeElem.style('position', 'fixed');
-        iframeElem.style('z-index', '999'); // iframe 的層級
+        iframeElem.style('z-index', '9999');
         iframeElem.style('background', '#ffffff');
         iframeElem.style('box-shadow', '0 8px 24px rgba(0,0,0,0.4)');
-        iframeElem.style('border-radius', '8px'); // 加上圓角讓外觀更好看
-
-        // 只在第一次創建 iframe 時創建關閉按鈕
-        closeBtnElem = createDiv('&times;'); // 使用 HTML 的 '×' 符號
-        closeBtnElem.style('position', 'fixed');
-        closeBtnElem.style('z-index', '1000'); // 確保按鈕在 iframe 上方
-        closeBtnElem.style('color', '#000');
-        closeBtnElem.style('font-size', '32px');
-        closeBtnElem.style('font-weight', 'bold');
-        closeBtnElem.style('cursor', 'pointer');
-        closeBtnElem.style('padding', '0 10px');
-        closeBtnElem.mousePressed(hideIframe); // 點擊按鈕時呼叫 hideIframe
     }
     iframeElem.attribute('src', url);
     iframeElem.style('display', 'block');
-    closeBtnElem.style('display', 'block'); // 同時顯示關閉按鈕
     resizeIframe();
 }
 
 function hideIframe() {
     if (iframeElem) {
         iframeElem.style('display', 'none');
-        iframeElem.attribute('src', ''); // 清空 src 停止內容播放並釋放資源
-    }
-    if (closeBtnElem) {
-        closeBtnElem.style('display', 'none');
+        // 若要一律移除可以改用 iframeElem.remove(); iframeElem = null;
     }
 }
 
 function resizeIframe() {
-    // 如果 iframe 或按鈕不存在，就直接返回
-    if (!iframeElem || !closeBtnElem) return;
-
+    if (!iframeElem) return;
     let w = floor(windowWidth * 0.8); // 寬為視窗 80%
     let h = floor(windowHeight * 0.8); // 高設定為視窗 80%
     let left = floor((windowWidth - w) / 2);
@@ -379,10 +414,6 @@ function resizeIframe() {
     iframeElem.style('height', h + 'px');
     iframeElem.style('left', left + 'px');
     iframeElem.style('top', top + 'px');
-
-    // 同步調整關閉按鈕的位置到 iframe 的右上角
-    closeBtnElem.style('left', (left + w - 35) + 'px'); // 調整 X 位置
-    closeBtnElem.style('top', (top + 5) + 'px');      // 調整 Y 位置
 }
 
 // 在視窗大小改變時同步調整 iframe
@@ -393,15 +424,6 @@ function windowResized() {
 
 // 修改：滑鼠點擊選單回報並處理第一單元作品（以 iframe 顯示）
 function mousePressed() {
-    // 如果 iframe 是可見的，且點擊位置不在 iframe 內部，則關閉 iframe
-    if (iframeElem && iframeElem.style('display') === 'block') {
-        let rect = iframeElem.elt.getBoundingClientRect();
-        if (mouseX < rect.left || mouseX > rect.right || mouseY < rect.top || mouseY > rect.bottom) {
-            hideIframe();
-            return; // 關閉後就不用再檢查選單點擊了
-        }
-    }
-
     let relMouseX = mouseX - menuX;
     if (relMouseX >= 0 && relMouseX <= menuWidth) {
         let startY = 80;
@@ -432,5 +454,8 @@ function mousePressed() {
 				}
             }
         }
+    } else {
+        // 若使用者點擊畫布其他地方，可選擇關閉 iframe
+        // hideIframe();
     }
 }
